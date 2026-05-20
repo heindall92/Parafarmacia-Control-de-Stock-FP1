@@ -4,9 +4,9 @@ Este proyecto es un sistema de gestión integral diseñado para optimizar el con
 
 ## 🎥 Demo del Proyecto
 
-<video src="./demo.mp4" controls width="100%">
-  Tu navegador no soporta el elemento de video.
-</video>
+
+https://github.com/user-attachments/assets/70a9e34d-9f38-44b1-8d29-53a63cee578e
+
 
 ## 🚀 Tecnologías Utilizadas
 
