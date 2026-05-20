@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+src-tauri/target/
+
+# Native binaries (generados al compilar)
+*.exe
+!src-tauri/icons/*.ico
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Env / secrets
+.env
+.env.*
+
+# Database local de desarrollo
+*.db
+*.db-journal
+
+# Tauri
+src-tauri/WixTools/
