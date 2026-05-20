@@ -1,15 +1,8 @@
-<p align="center">
-  <iframe
-    src="https://raw.githack.com/heindall92/Parafarmacia-Control-de-Stock-FP1/main/docs/demo.html"
-    title="Demo Parafarmacia Stock"
-    width="960"
-    height="540"
-    frameborder="0"
-    allow="autoplay; fullscreen; encrypted-media"
-    allowfullscreen
-    style="max-width:100%; border-radius:14px; border:1px solid #2d6a4f; box-shadow:0 18px 60px rgba(45,106,79,0.25);">
-  </iframe>
-</p>
+
+
+https://github.com/user-attachments/assets/5dfa3c48-2c16-4dcb-bb6d-75110c87b526
+
+
 
 # Parafarmacia Stock
 
