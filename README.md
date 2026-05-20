@@ -1,57 +1,55 @@
+# 🏥 Parafarmacia - Control de Stock
 
+Este proyecto es un sistema de gestión integral diseñado para optimizar el control de inventario en una parafarmacia. Resuelve el problema del seguimiento manual de productos, previniendo rupturas de stock y facilitando la gestión de entradas y salidas de mercancía de manera eficiente y moderna.
 
-https://github.com/user-attachments/assets/5dfa3c48-2c16-4dcb-bb6d-75110c87b526
+## 🎥 Demo del Proyecto
 
+<video src="./demo.mp4" controls width="100%">
+  Tu navegador no soporta el elemento de video.
+</video>
 
+## 🚀 Tecnologías Utilizadas
 
-# Parafarmacia Stock
+Este proyecto ha sido desarrollado con un stack moderno y estructurado:
+- **Frontend & Backend**: [Next.js](https://nextjs.org/) (React) con **TypeScript** para un tipado estricto y mayor robustez.
+- **Estilos**: **Tailwind CSS v4** para una interfaz limpia, responsive y profesional.
+- **Iconos**: **Lucide React**.
+- **Base de Datos & ORM**: **Prisma** para el modelado, migraciones y persistencia de datos segura.
 
-Aplicación **nativa de Windows** (Tauri 2 + Rust + SQLite) para control de inventario de parafarmacia por estante y cuadrante. Funciona **100% offline**.
+## 🛠️ Instalación y Despliegue
 
-## Características
+Sigue estos pasos para correr el proyecto en tu entorno local:
 
-- Inventario con ubicación exacta (estante + cuadrante)
-- Búsqueda rápida en mostrador
-- Mapa visual de estantes
-- Alertas de stock bajo
-- Modo claro / oscuro
-- Pantalla de arranque profesional
-- Base de datos SQLite local
+1. **Clonar el repositorio**:
+   ```bash
+   git clone https://github.com/heindall92/Parafarmacia-Control-de-Stock-FP1.git
+   cd parafarmacia-stock
+   ```
 
-## Instalación (farmacia)
+2. **Instalar dependencias**:
+   ```bash
+   npm install
+   ```
 
-1. Compilar el instalador (solo cuando haya cambios):
+3. **Configurar la base de datos**:
+   - Crea un archivo `.env` en la raíz del proyecto basándote en el ejemplo de configuración.
+   - Genera el cliente de Prisma y corre las migraciones:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
 
-```powershell
-npm run native:build
-```
+4. **Ejecutar en desarrollo**:
+   ```bash
+   npm run dev
+   ```
+   Abre [http://localhost:3000](http://localhost:3000) en tu navegador para ver el resultado.
 
-2. Ejecutar el instalador generado:
+## ✨ Características Principales
 
-```
-src-tauri\target\release\bundle\nsis\Parafarmacia Stock_0.1.0_x64-setup.exe
-```
+- **Control de Excepciones Robusto**: El sistema cuenta con validaciones limpias mediante bloques `try-catch` para manejar fallos de red, caídas de la base de datos y errores de entrada de usuario (por ejemplo, evitando que se introduzcan letras en los campos numéricos de cantidad).
+- **Gestión Intuitiva**: Interfaz amigable para llevar el control del stock de forma ágil y precisa.
 
-3. Abrir **Parafarmacia Stock** desde el menú Inicio.
-
-El asistente es tipo **Siguiente → Siguiente → Instalar**. No requiere navegador ni `localhost`.
-
-## Desarrollo
-
-| Comando | Para qué |
-|---------|----------|
-| `npm run tauri:dev` | Desarrollo con recarga en caliente |
-| `npm run native:run` | Probar build nativo sin instalador |
-| `npm run native:build` | Generar instalador `.exe` para Windows |
-
-`npm run tauri:dev` depende de un servidor local en `http://localhost:1420` — **solo para programadores**, no para uso en la farmacia.
-
-## Stack
-
-- **Frontend:** React 19 + TypeScript + Tailwind CSS v4
-- **Desktop:** Tauri 2 + Rust
-- **Base de datos:** SQLite (`tauri-plugin-sql`)
-
-## Licencia
-
-Proyecto privado — uso interno en parafarmacia.
+## 🔮 Próximas Mejoras (Roadmap)
+- **Seguridad**: Implementación de autenticación y roles de usuario (Administrador vs. Empleado) usando contraseñas encriptadas (Bcrypt).
+- **Reportes**: Generación de reportes exportables a PDF o CSV para productos próximos a caducar o por debajo del stock mínimo.
