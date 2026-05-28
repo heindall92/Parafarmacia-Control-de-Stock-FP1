@@ -31,5 +31,10 @@ desktop.ini
 *.db
 *.db-journal
 
+# Graphify (local/cache; commit graph.json + report + html)
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/cache/
+
 # Tauri
 src-tauri/WixTools/
