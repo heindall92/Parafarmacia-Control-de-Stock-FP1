@@ -50,7 +50,7 @@
   },
   "plugins": {
     "sql": {
-      "preload": ["sqlite:farmacia.db"]
+      "preload": ["sqlite:farmacia_real.db"]
     }
   }
 }

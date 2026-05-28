@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+*.exe
+*.db
+graphify-out/manifest.json
+graphify-out/cost.json

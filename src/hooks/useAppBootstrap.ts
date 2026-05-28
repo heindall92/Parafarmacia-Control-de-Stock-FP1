@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   getCategorias,
-  getProductos,
+  getProductosPaginated,
   getProductosStockBajo,
+  getProductosStockBajoCount,
+  initDatabase,
   type Categoria,
   type Producto,
 } from "../lib/database";
@@ -10,14 +12,15 @@ import {
 export type BootstrapData = {
   productos: Producto[];
   alertas: Producto[];
+  alertCount: number;
   categorias: Categoria[];
   selectedProduct: Producto | null;
 };
 
 export const BOOTSTRAP_STEPS = [
   "Inicializando entorno local",
-  "Preparando base de datos SQLite",
-  "Sincronizando inventario y estantes",
+  "Importando inventario real desde Excel",
+  "Preparando catálogo de productos",
   "Listo para trabajar offline",
 ] as const;
 
@@ -29,41 +32,62 @@ export function useAppBootstrap() {
   const [exiting, setExiting] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [data, setData] = useState<BootstrapData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const startedAt = Date.now();
 
     async function boot() {
-      setStep(1);
-      await pause(STEP_PAUSE_MS);
-      if (cancelled) return;
+      try {
+        setStep(1);
+        await pause(STEP_PAUSE_MS);
+        if (cancelled) return;
 
-      setStep(2);
-      const [prods, low, cats] = await Promise.all([
-        getProductos(),
-        getProductosStockBajo(),
-        getCategorias(),
-      ]);
-      if (cancelled) return;
+        setStep(2);
+        await initDatabase();
+        if (cancelled) return;
 
-      setStep(3);
-      await pause(STEP_PAUSE_MS);
-      if (cancelled) return;
+        setStep(3);
+        const [prods, low, cats, alertCount] = await Promise.all([
+          getProductosPaginated(50, 0),
+          getProductosStockBajo(),
+          getCategorias(),
+          getProductosStockBajoCount(),
+        ]);
+        if (cancelled) return;
 
-      setData({
-        productos: prods,
-        alertas: low,
-        categorias: cats,
-        selectedProduct: prods[0] ?? null,
-      });
+        setData({
+          productos: prods,
+          alertas: low,
+          alertCount,
+          categorias: cats,
+          selectedProduct: prods[0] ?? null,
+        });
 
-      setStep(4);
-      const elapsed = Date.now() - startedAt;
-      await pause(Math.max(0, MIN_SPLASH_MS - elapsed));
-      if (cancelled) return;
+        setStep(4);
+        const elapsed = Date.now() - startedAt;
+        await pause(Math.max(0, MIN_SPLASH_MS - elapsed));
+        if (cancelled) return;
 
-      setExiting(true);
+        setExiting(true);
+      } catch (bootError) {
+        console.error(bootError);
+        setError(
+          bootError instanceof Error
+            ? bootError.message
+            : "No se pudo cargar la base de datos local."
+        );
+        setData({
+          productos: [],
+          alertas: [],
+          alertCount: 0,
+          categorias: [],
+          selectedProduct: null,
+        });
+        setStep(4);
+        setExiting(true);
+      }
     }
 
     void boot();
@@ -84,6 +108,7 @@ export function useAppBootstrap() {
     step,
     progress,
     data,
+    error,
     onSplashExitComplete,
   };
 }

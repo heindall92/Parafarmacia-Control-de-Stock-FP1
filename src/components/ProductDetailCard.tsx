@@ -9,9 +9,10 @@ import type { Producto } from "../lib/database";
 
 type ProductDetailCardProps = {
   producto: Producto | null;
+  onEdit?: (producto: Producto) => void;
 };
 
-export function ProductDetailCard({ producto }: ProductDetailCardProps) {
+export function ProductDetailCard({ producto, onEdit }: ProductDetailCardProps) {
   if (!producto) {
     return (
       <div className="surface-panel morph-main-card rounded-[var(--radius-xl)] p-6">
@@ -22,9 +23,13 @@ export function ProductDetailCard({ producto }: ProductDetailCardProps) {
     );
   }
 
-  const ubicacion = producto.estante_nombre
-    ? `${producto.estante_nombre} · Cuadrante ${producto.cuadrante_codigo ?? "—"}`
-    : "Sin ubicación asignada";
+  const ubicacion = producto.ubicacion_detalle
+    ? producto.estante_nombre
+      ? `${producto.estante_nombre} · ${producto.ubicacion_detalle}`
+      : producto.ubicacion_detalle
+    : producto.estante_nombre
+      ? `${producto.estante_nombre}${producto.cuadrante_codigo ? ` · Cuadrante ${producto.cuadrante_codigo}` : ""}`
+      : "Sin ubicación asignada";
 
   const stockStatus =
     producto.stock <= producto.stock_minimo
@@ -33,17 +38,28 @@ export function ProductDetailCard({ producto }: ProductDetailCardProps) {
 
   return (
     <div className="surface-panel morph-main-card rounded-[var(--radius-xl)]">
-      <div className="divider-subtle flex items-center justify-between border-b px-6 py-4">
+      <div className="divider-subtle border-b px-6 py-4">
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <h3 className="text-lg font-bold leading-snug text-[var(--text-primary)]">
+            {producto.nombre}
+          </h3>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(producto)}
+              className="flex shrink-0 items-center gap-1 text-sm font-medium text-[var(--green-accent)]"
+            >
+              Editar producto
+              <ChevronDown size={16} />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
           <Tag size={16} className="text-[var(--green-accent)]" />
           <span>
             ID: <strong className="text-[var(--text-primary)]">{producto.codigo_interno ?? producto.id}</strong>
           </span>
         </div>
-        <button className="flex items-center gap-1 text-sm font-medium text-[var(--green-accent)]">
-          Editar producto
-          <ChevronDown size={16} />
-        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-6 px-6 py-5">
@@ -55,7 +71,17 @@ export function ProductDetailCard({ producto }: ProductDetailCardProps) {
             <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
               Stock
             </div>
-            <div className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">{stockStatus}</div>
+            <div className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">
+              {producto.stock} uds.
+              {producto.stock_minimo > 0 && (
+                <span className="ml-1 text-xs font-normal text-[var(--text-secondary)]">
+                  (mín. {producto.stock_minimo})
+                </span>
+              )}
+            </div>
+            <div className={`text-xs ${producto.stock <= producto.stock_minimo && producto.stock_minimo > 0 ? "text-[var(--danger-text)]" : "text-[var(--text-secondary)]"}`}>
+              {stockStatus}
+            </div>
             {producto.precio && (
               <div className="text-xs text-[var(--text-secondary)]">
                 Precio: {producto.precio.toFixed(2)} €
@@ -75,7 +101,7 @@ export function ProductDetailCard({ producto }: ProductDetailCardProps) {
             <div className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">
               {producto.categoria_nombre ?? "Sin categoría"}
             </div>
-            <div className="text-xs text-[var(--text-secondary)]">{producto.laboratorio}</div>
+            <div className="text-xs text-[var(--text-secondary)]">{producto.laboratorio ?? producto.categoria_nombre}</div>
           </div>
         </div>
 

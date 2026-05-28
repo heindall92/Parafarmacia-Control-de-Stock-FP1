@@ -43,9 +43,9 @@ export function ProductList({
                 </div>
               </div>
               {showLocation && (
-                <div className="flex items-center gap-1 text-xs font-medium text-[var(--green-accent)]">
-                  <MapPin size={12} />
-                  {p.cuadrante_codigo ?? "—"}
+                <div className="max-w-[180px] truncate text-xs font-medium text-[var(--green-accent)]" title={p.ubicacion_detalle ?? p.cuadrante_codigo ?? undefined}>
+                  <MapPin size={12} className="mr-1 inline" />
+                  {p.ubicacion_detalle ?? p.cuadrante_codigo ?? "—"}
                 </div>
               )}
               <div

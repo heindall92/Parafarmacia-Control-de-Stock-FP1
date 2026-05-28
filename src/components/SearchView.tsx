@@ -7,9 +7,10 @@ import { ProductList } from "./ProductList";
 type SearchViewProps = {
   selectedProduct: Producto | null;
   onSelectProduct: (p: Producto) => void;
+  onEditProduct?: (producto: Producto) => void;
 };
 
-export function SearchView({ selectedProduct, onSelectProduct }: SearchViewProps) {
+export function SearchView({ selectedProduct, onSelectProduct, onEditProduct }: SearchViewProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,7 @@ export function SearchView({ selectedProduct, onSelectProduct }: SearchViewProps
 
   return (
     <div className="flex h-full flex-col gap-5">
-      <ProductDetailCard producto={selectedProduct} />
+      <ProductDetailCard producto={selectedProduct} onEdit={onEditProduct} />
 
       <div className="content-panel morph-content flex flex-1 flex-col overflow-hidden rounded-[var(--radius-xl)]">
         <div className="content-panel-header p-5">

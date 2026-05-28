@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import seedData from "./seedData.json";
 
 export type Categoria = {
   id: number;
@@ -32,6 +33,7 @@ export type Producto = {
   stock_minimo: number;
   precio: number | null;
   laboratorio: string | null;
+  ubicacion_detalle: string | null;
   notas: string | null;
   activo: number;
   categoria_nombre?: string;
@@ -39,6 +41,22 @@ export type Producto = {
   estante_nombre?: string;
   cuadrante_codigo?: string;
 };
+
+type SeedProducto = {
+  codigo_interno: string;
+  nombre: string;
+  estante: string;
+  categoria: string;
+  ubicacion: string | null;
+  stock: number;
+  stock_minimo: number;
+  precio: number | null;
+  laboratorio: string | null;
+  notas: string | null;
+};
+
+const SEED_VERSION = "parafarmacia-v3";
+const EXPECTED_PRODUCTS = seedData.stats.productos;
 
 let db: Database | null = null;
 
@@ -52,6 +70,11 @@ export async function getDb(): Promise<Database> {
 
 async function initSchema(database: Database) {
   await database.execute(`
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS categorias (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nombre TEXT NOT NULL UNIQUE,
@@ -85,6 +108,7 @@ async function initSchema(database: Database) {
       stock_minimo INTEGER NOT NULL DEFAULT 5,
       precio REAL,
       laboratorio TEXT,
+      ubicacion_detalle TEXT,
       notas TEXT,
       activo INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -94,79 +118,255 @@ async function initSchema(database: Database) {
     );
   `);
 
-  const count = await database.select<{ count: number }[]>(
-    "SELECT COUNT(*) as count FROM categorias"
+  await migrateSchema(database);
+  await ensureSeed(database);
+}
+
+async function migrateSchema(database: Database) {
+  const columns = await database.select<{ name: string }[]>(
+    "PRAGMA table_info(productos)"
+  );
+  const hasUbicacion = columns.some((column) => column.name === "ubicacion_detalle");
+  if (!hasUbicacion) {
+    await database.execute("ALTER TABLE productos ADD COLUMN ubicacion_detalle TEXT");
+  }
+}
+
+async function ensureSeed(database: Database) {
+  const needsImport = await shouldReimportInventory(database);
+  if (!needsImport) return;
+
+  await database.execute("DELETE FROM productos");
+  await database.execute("DELETE FROM cuadrantes");
+  await database.execute("DELETE FROM estantes");
+  await database.execute("DELETE FROM categorias");
+
+  await seedFromExcelData(database);
+
+  await database.execute(
+    "INSERT OR REPLACE INTO app_meta (key, value) VALUES ('seed_version', $1)",
+    [SEED_VERSION]
+  );
+}
+
+async function shouldReimportInventory(database: Database): Promise<boolean> {
+  const rows = await database.select<{ value: string }[]>(
+    "SELECT value FROM app_meta WHERE key = 'seed_version'"
+  );
+  const storedVersion = rows[0]?.value;
+
+  const countRows = await database.select<{ count: number }[]>(
+    "SELECT COUNT(*) as count FROM productos WHERE activo = 1"
+  );
+  const currentCount = countRows[0]?.count ?? 0;
+
+  if (storedVersion !== SEED_VERSION) return true;
+  if (currentCount < EXPECTED_PRODUCTS * 0.9) return true;
+
+  const demoRows = await database.select<{ id: number }[]>(`
+    SELECT id FROM productos
+    WHERE codigo_interno = 'PF-001'
+      AND nombre LIKE '%CeraVe%'
+    LIMIT 1
+  `);
+  if (demoRows.length > 0) return true;
+
+  const demoEstante = await database.select<{ id: number }[]>(`
+    SELECT id FROM estantes
+    WHERE nombre LIKE 'Estante A — Venta libre%'
+    LIMIT 1
+  `);
+  if (demoEstante.length > 0) return true;
+
+  return false;
+}
+
+export async function reimportarInventario(): Promise<number> {
+  db = null;
+  const database = await Database.load("sqlite:farmacia.db");
+  await migrateSchema(database);
+
+  await database.execute("DELETE FROM productos");
+  await database.execute("DELETE FROM cuadrantes");
+  await database.execute("DELETE FROM estantes");
+  await database.execute("DELETE FROM categorias");
+
+  await seedFromExcelData(database);
+
+  await database.execute(
+    "INSERT OR REPLACE INTO app_meta (key, value) VALUES ('seed_version', $1)",
+    [SEED_VERSION]
   );
 
-  if (count[0]?.count === 0) {
-    await seedDemo(database);
-  }
+  db = database;
+  const rows = await database.select<{ count: number }[]>(
+    "SELECT COUNT(*) as count FROM productos WHERE activo = 1"
+  );
+  return rows[0]?.count ?? 0;
 }
 
-async function seedDemo(database: Database) {
-  const categorias = [
-    ["Dermocosmética", "#2D6A4F"],
-    ["Higiene", "#40916C"],
-    ["Vitaminas", "#52B788"],
-    ["Primeros auxilios", "#1B4332"],
-    ["Infantil", "#74C69D"],
-  ] as const;
+export type NuevoProductoInput = {
+  nombre: string;
+  codigo_interno?: string | null;
+  categoria_id?: number | null;
+  estante_id?: number | null;
+  ubicacion_detalle?: string | null;
+  stock?: number;
+  stock_minimo?: number;
+  precio?: number | null;
+  laboratorio?: string | null;
+  notas?: string | null;
+};
 
-  for (const [nombre, color] of categorias) {
+export async function crearProducto(input: NuevoProductoInput): Promise<Producto> {
+  const database = await getDb();
+  await database.execute(
+    `INSERT INTO productos (
+      codigo_interno, nombre, categoria_id, estante_id, cuadrante_id,
+      stock, stock_minimo, precio, laboratorio, ubicacion_detalle, notas
+    ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10)`,
+    [
+      input.codigo_interno ?? null,
+      input.nombre.trim(),
+      input.categoria_id ?? null,
+      input.estante_id ?? null,
+      input.stock ?? 0,
+      input.stock_minimo ?? 0,
+      input.precio ?? null,
+      input.laboratorio ?? null,
+      input.ubicacion_detalle ?? null,
+      input.notas ?? null,
+    ]
+  );
+
+  const rows = await database.select<{ id: number }[]>(
+    "SELECT id FROM productos ORDER BY id DESC LIMIT 1"
+  );
+
+  const created = rows[0]?.id
+    ? await getProductoById(rows[0].id)
+    : null;
+
+  if (!created) {
+    throw new Error("No se pudo crear el producto.");
+  }
+
+  return created;
+}
+
+export async function getSeedVersion(): Promise<string | null> {
+  const database = await getDb();
+  const rows = await database.select<{ value: string }[]>(
+    "SELECT value FROM app_meta WHERE key = 'seed_version'"
+  );
+  return rows[0]?.value ?? null;
+}
+
+async function seedFromExcelData(database: Database) {
+  const categoriaIds = new Map<string, number>();
+
+  for (const categoria of seedData.categorias) {
     await database.execute(
       "INSERT INTO categorias (nombre, color) VALUES ($1, $2)",
-      [nombre, color]
+      [categoria.nombre, categoria.color]
     );
+    const inserted = await database.select<{ id: number }[]>(
+      "SELECT id FROM categorias WHERE nombre = $1",
+      [categoria.nombre]
+    );
+    if (inserted[0]) categoriaIds.set(categoria.nombre, inserted[0].id);
   }
 
-  const estantes = [
-    ["Estante A — Venta libre", "Productos de mostrador frontal"],
-    ["Estante B — Dermocosmética", "Cremas y protección solar"],
-    ["Estante C — Suplementos", "Vitaminas y minerales"],
-  ] as const;
+  const estanteIds = new Map<string, number>();
 
-  for (const [nombre, descripcion] of estantes) {
+  for (const estante of seedData.estantes) {
     await database.execute(
       "INSERT INTO estantes (nombre, descripcion) VALUES ($1, $2)",
-      [nombre, descripcion]
+      [estante.nombre, estante.descripcion]
     );
+    const inserted = await database.select<{ id: number }[]>(
+      "SELECT id FROM estantes WHERE nombre = $1",
+      [estante.nombre]
+    );
+    if (inserted[0]) estanteIds.set(estante.nombre, inserted[0].id);
   }
 
-  for (let estanteId = 1; estanteId <= 3; estanteId++) {
-    for (let fila = 1; fila <= 4; fila++) {
-      for (let col = 1; col <= 6; col++) {
-        const letra = String.fromCharCode(64 + fila);
-        await database.execute(
-          "INSERT INTO cuadrantes (estante_id, codigo, fila, columna) VALUES ($1, $2, $3, $4)",
-          [estanteId, `${letra}${col}`, fila, col]
-        );
-      }
-    }
-  }
+  for (const producto of seedData.productos as SeedProducto[]) {
+    const categoriaId = categoriaIds.get(producto.categoria) ?? null;
+    const estanteId = estanteIds.get(producto.estante) ?? null;
 
-  const productosFixed = [
-    ["PF-001", "Crema hidratante CeraVe 454ml", 1, 2, 8, 12, 5, 14.95, "CeraVe"],
-    ["PF-002", "Protector solar ISDIN SPF50+", 1, 2, 14, 8, 3, 22.5, "ISDIN"],
-    ["PF-003", "Vitamina D3 2000 UI", 3, 3, 45, 20, 8, 9.99, "Arkopharma"],
-    ["PF-004", "Gel de manos antiséptico 500ml", 2, 1, 3, 15, 5, 4.5, "Sanytol"],
-    ["PF-005", "Paracetamol infantil jarabe", 5, 1, 6, 6, 4, 6.75, "Kern Pharma"],
-    ["PF-006", "Apósitos adhesivos surtidos", 4, 1, 18, 24, 10, 3.25, "Hansaplast"],
-    ["PF-007", "Champú anticaspa Head&Shoulders", 2, 2, 5, 10, 4, 5.49, "P&G"],
-    ["PF-008", "Omega 3 1000mg 60 cápsulas", 3, 3, 22, 14, 6, 12.9, "Solgar"],
-  ] as const;
-
-  for (const [codigo, nombre, catId, estId, cuadId, stock, min, precio, lab] of productosFixed) {
     await database.execute(
-      `INSERT INTO productos (codigo_interno, nombre, categoria_id, estante_id, cuadrante_id, stock, stock_minimo, precio, laboratorio)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [codigo, nombre, catId, estId, cuadId, stock, min, precio, lab]
+      `INSERT INTO productos (
+        codigo_interno, nombre, categoria_id, estante_id, cuadrante_id,
+        stock, stock_minimo, precio, laboratorio, ubicacion_detalle, notas
+      ) VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10)`,
+      [
+        producto.codigo_interno,
+        producto.nombre,
+        categoriaId,
+        estanteId,
+        producto.stock,
+        0,
+        producto.precio,
+        producto.laboratorio,
+        producto.ubicacion,
+        producto.notas,
+      ]
     );
   }
 }
 
-export async function getProductos(): Promise<Producto[]> {
+export async function initDatabase(): Promise<void> {
+  await getDb();
+}
+
+export async function getProductosCount(): Promise<number> {
   const database = await getDb();
-  return database.select<Producto[]>(`
+  const rows = await database.select<{ count: number }[]>(
+    "SELECT COUNT(*) as count FROM productos WHERE activo = 1"
+  );
+  return rows[0]?.count ?? 0;
+}
+
+export async function getProductosPaginated(
+  limit = 50,
+  offset = 0,
+  query = ""
+): Promise<Producto[]> {
+  const database = await getDb();
+  const trimmed = query.trim();
+
+  if (trimmed) {
+    const term = `%${trimmed}%`;
+    return database.select<Producto[]>(
+      `
+      SELECT p.*,
+        c.nombre as categoria_nombre,
+        c.color as categoria_color,
+        e.nombre as estante_nombre,
+        q.codigo as cuadrante_codigo
+      FROM productos p
+      LEFT JOIN categorias c ON c.id = p.categoria_id
+      LEFT JOIN estantes e ON e.id = p.estante_id
+      LEFT JOIN cuadrantes q ON q.id = p.cuadrante_id
+      WHERE p.activo = 1 AND (
+        p.nombre LIKE $1 OR
+        p.codigo_interno LIKE $1 OR
+        p.laboratorio LIKE $1 OR
+        p.ubicacion_detalle LIKE $1 OR
+        p.notas LIKE $1 OR
+        c.nombre LIKE $1 OR
+        e.nombre LIKE $1
+      )
+      ORDER BY p.nombre
+      LIMIT $2 OFFSET $3
+    `,
+      [term, limit, offset]
+    );
+  }
+
+  return database.select<Producto[]>(
+    `
     SELECT p.*,
       c.nombre as categoria_nombre,
       c.color as categoria_color,
@@ -178,7 +378,14 @@ export async function getProductos(): Promise<Producto[]> {
     LEFT JOIN cuadrantes q ON q.id = p.cuadrante_id
     WHERE p.activo = 1
     ORDER BY p.nombre
-  `);
+    LIMIT $1 OFFSET $2
+  `,
+    [limit, offset]
+  );
+}
+
+export async function getProductos(): Promise<Producto[]> {
+  return getProductosPaginated(100, 0);
 }
 
 export async function buscarProductos(query: string): Promise<Producto[]> {
@@ -199,11 +406,14 @@ export async function buscarProductos(query: string): Promise<Producto[]> {
       p.nombre LIKE $1 OR
       p.codigo_interno LIKE $1 OR
       p.laboratorio LIKE $1 OR
+      p.ubicacion_detalle LIKE $1 OR
+      p.notas LIKE $1 OR
       c.nombre LIKE $1 OR
+      e.nombre LIKE $1 OR
       q.codigo LIKE $1
     )
     ORDER BY p.nombre
-    LIMIT 50
+    LIMIT 80
   `,
     [term]
   );
@@ -221,9 +431,24 @@ export async function getProductosStockBajo(): Promise<Producto[]> {
     LEFT JOIN categorias c ON c.id = p.categoria_id
     LEFT JOIN estantes e ON e.id = p.estante_id
     LEFT JOIN cuadrantes q ON q.id = p.cuadrante_id
-    WHERE p.activo = 1 AND p.stock <= p.stock_minimo
+    WHERE p.activo = 1
+      AND p.stock_minimo > 0
+      AND p.stock <= p.stock_minimo
     ORDER BY p.stock ASC
+    LIMIT 100
   `);
+}
+
+export async function getProductosStockBajoCount(): Promise<number> {
+  const database = await getDb();
+  const rows = await database.select<{ count: number }[]>(`
+    SELECT COUNT(*) as count
+    FROM productos
+    WHERE activo = 1
+      AND stock_minimo > 0
+      AND stock <= stock_minimo
+  `);
+  return rows[0]?.count ?? 0;
 }
 
 export async function getCategorias(): Promise<Categoria[]> {
@@ -257,6 +482,26 @@ export async function getProductosPorCuadrante(cuadranteId: number): Promise<Pro
   );
 }
 
+export async function getProductosPorEstante(estanteId: number): Promise<Producto[]> {
+  const database = await getDb();
+  return database.select<Producto[]>(
+    `
+    SELECT p.*,
+      c.nombre as categoria_nombre,
+      c.color as categoria_color,
+      e.nombre as estante_nombre,
+      q.codigo as cuadrante_codigo
+    FROM productos p
+    LEFT JOIN categorias c ON c.id = p.categoria_id
+    LEFT JOIN estantes e ON e.id = p.estante_id
+    LEFT JOIN cuadrantes q ON q.id = p.cuadrante_id
+    WHERE p.estante_id = $1 AND p.activo = 1
+    ORDER BY p.ubicacion_detalle, p.nombre
+  `,
+    [estanteId]
+  );
+}
+
 export async function getProductoById(id: number): Promise<Producto | null> {
   const database = await getDb();
   const rows = await database.select<Producto[]>(
@@ -275,4 +520,146 @@ export async function getProductoById(id: number): Promise<Producto | null> {
     [id]
   );
   return rows[0] ?? null;
+}
+export function getSeedStats() {
+  return seedData.stats;
+}
+
+export async function getCategoriaCounts(): Promise<Record<number, number>> {
+  const database = await getDb();
+  const rows = await database.select<{ categoria_id: number; count: number }[]>(`
+    SELECT categoria_id, COUNT(*) as count
+    FROM productos
+    WHERE activo = 1 AND categoria_id IS NOT NULL
+    GROUP BY categoria_id
+  `);
+  return Object.fromEntries(rows.map((row) => [row.categoria_id, row.count]));
+}
+
+export async function getEstanteCounts(): Promise<Record<number, number>> {
+  const database = await getDb();
+  const rows = await database.select<{ estante_id: number; count: number }[]>(`
+    SELECT estante_id, COUNT(*) as count
+    FROM productos
+    WHERE activo = 1 AND estante_id IS NOT NULL
+    GROUP BY estante_id
+  `);
+  return Object.fromEntries(rows.map((row) => [row.estante_id, row.count]));
+}
+
+export async function crearCategoria(nombre: string, color: string): Promise<Categoria> {
+  const database = await getDb();
+  await database.execute("INSERT INTO categorias (nombre, color) VALUES ($1, $2)", [
+    nombre.trim(),
+    color,
+  ]);
+  const rows = await database.select<Categoria[]>(
+    "SELECT * FROM categorias WHERE nombre = $1",
+    [nombre.trim()]
+  );
+  if (!rows[0]) throw new Error("No se pudo crear la categoría.");
+  return rows[0];
+}
+
+export async function actualizarCategoria(
+  id: number,
+  nombre: string,
+  color: string
+): Promise<Categoria> {
+  const database = await getDb();
+  await database.execute("UPDATE categorias SET nombre = $1, color = $2 WHERE id = $3", [
+    nombre.trim(),
+    color,
+    id,
+  ]);
+  const rows = await database.select<Categoria[]>("SELECT * FROM categorias WHERE id = $1", [id]);
+  if (!rows[0]) throw new Error("Categoría no encontrada.");
+  return rows[0];
+}
+
+export async function eliminarCategoria(id: number): Promise<void> {
+  const database = await getDb();
+  await database.execute("UPDATE productos SET categoria_id = NULL WHERE categoria_id = $1", [id]);
+  await database.execute("DELETE FROM categorias WHERE id = $1", [id]);
+}
+
+export async function crearEstante(nombre: string, descripcion?: string | null): Promise<Estante> {
+  const database = await getDb();
+  await database.execute("INSERT INTO estantes (nombre, descripcion) VALUES ($1, $2)", [
+    nombre.trim(),
+    descripcion?.trim() || null,
+  ]);
+  const rows = await database.select<Estante[]>("SELECT * FROM estantes WHERE nombre = $1", [
+    nombre.trim(),
+  ]);
+  if (!rows[0]) throw new Error("No se pudo crear el estante.");
+  return rows[0];
+}
+
+export async function actualizarEstante(
+  id: number,
+  nombre: string,
+  descripcion?: string | null
+): Promise<Estante> {
+  const database = await getDb();
+  await database.execute("UPDATE estantes SET nombre = $1, descripcion = $2 WHERE id = $3", [
+    nombre.trim(),
+    descripcion?.trim() || null,
+    id,
+  ]);
+  const rows = await database.select<Estante[]>("SELECT * FROM estantes WHERE id = $1", [id]);
+  if (!rows[0]) throw new Error("Estante no encontrado.");
+  return rows[0];
+}
+
+export async function eliminarEstante(id: number): Promise<void> {
+  const database = await getDb();
+  await database.execute("UPDATE productos SET estante_id = NULL WHERE estante_id = $1", [id]);
+  await database.execute("DELETE FROM cuadrantes WHERE estante_id = $1", [id]);
+  await database.execute("DELETE FROM estantes WHERE id = $1", [id]);
+}
+
+export type ActualizarProductoInput = NuevoProductoInput;
+
+export async function actualizarProducto(
+  id: number,
+  input: ActualizarProductoInput
+): Promise<Producto> {
+  const database = await getDb();
+  await database.execute(
+    `UPDATE productos SET
+      codigo_interno = $1,
+      nombre = $2,
+      categoria_id = $3,
+      estante_id = $4,
+      stock = $5,
+      stock_minimo = $6,
+      precio = $7,
+      laboratorio = $8,
+      ubicacion_detalle = $9,
+      notas = $10
+    WHERE id = $11 AND activo = 1`,
+    [
+      input.codigo_interno ?? null,
+      input.nombre.trim(),
+      input.categoria_id ?? null,
+      input.estante_id ?? null,
+      input.stock ?? 0,
+      input.stock_minimo ?? 0,
+      input.precio ?? null,
+      input.laboratorio ?? null,
+      input.ubicacion_detalle ?? null,
+      input.notas ?? null,
+      id,
+    ]
+  );
+
+  const updated = await getProductoById(id);
+  if (!updated) throw new Error("No se pudo actualizar el producto.");
+  return updated;
+}
+
+export async function eliminarProducto(id: number): Promise<void> {
+  const database = await getDb();
+  await database.execute("UPDATE productos SET activo = 0 WHERE id = $1", [id]);
 }

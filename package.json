@@ -12,7 +12,8 @@
     "tauri:build": "tauri build",
     "native:run": "tauri run --release",
     "native:build": "tauri build",
-    "native:install": "tauri build"
+    "native:install": "tauri build",
+    "import:excel": "python scripts/import_parafarmacia_excel.py"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
