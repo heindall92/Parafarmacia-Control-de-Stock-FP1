@@ -22,13 +22,13 @@ https://github.com/user-attachments/assets/70a9e34d-9f38-44b1-8d29-53a63cee578e
 
 ## ⬇️ Descarga directa (sin instalar nada)
 
-¿No quieres compilar? Descarga el ejecutable ya listo desde la carpeta
-[**`descargas/`**](./descargas):
+¿No quieres compilar? Descarga el ejecutable ya listo desde la
+[**página de Releases**](https://github.com/heindall92/Parafarmacia-Control-de-Stock-FP1/releases/latest):
 
 | Archivo | Uso |
 |---------|-----|
-| **Parafarmacia-Stock-Portable.exe** (~20 MB) | Doble clic y funciona. No instala nada. |
-| **Parafarmacia-Stock-Instalador.exe** (~18 MB) | Instalador con acceso directo en el menú Inicio. |
+| [**Parafarmacia-Stock-Portable.exe**](https://github.com/heindall92/Parafarmacia-Control-de-Stock-FP1/releases/latest/download/Parafarmacia-Stock-Portable.exe) (~20 MB) | Doble clic y funciona. No instala nada. |
+| [**Parafarmacia-Stock-Instalador.exe**](https://github.com/heindall92/Parafarmacia-Control-de-Stock-FP1/releases/latest/download/Parafarmacia-Stock-Instalador.exe) (~18 MB) | Instalador con acceso directo en el menú Inicio. |
 
 Compatible con **Windows 10/11 (64 bits)**. No requiere Node ni `npm install`.
 Más detalles en [`descargas/README.md`](./descargas/README.md).

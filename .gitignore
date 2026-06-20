@@ -8,8 +8,8 @@ src-tauri/target/
 # Native binaries (generados al compilar)
 *.exe
 !src-tauri/icons/*.ico
-# Ejecutables distribuibles (descarga directa sin compilar)
-!descargas/*.exe
+# Los ejecutables distribuibles se publican como GitHub Releases, no en el repo
+descargas/*.exe
 
 # Volcado temporal del importador de Excel (pesa cientos de MB, NO subir)
 _xlsx_probe/
