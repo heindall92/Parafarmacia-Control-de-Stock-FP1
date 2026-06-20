@@ -12,16 +12,16 @@ export function useMorphTransition() {
 export type AppView =
   | "inventario"
   | "busqueda"
+  | "vista-3d"
   | "estantes"
   | "categorias"
-  | "alertas"
   | "configuracion";
 
 export const VIEW_LABELS: Record<AppView, string> = {
   inventario: "Inventario",
   busqueda: "Búsqueda rápida",
+  "vista-3d": "Vista 3D",
   estantes: "Mapa de estantes",
   categorias: "Categorías",
-  alertas: "Stock bajo",
   configuracion: "Configuración",
 };

@@ -15,9 +15,10 @@
         "title": "Parafarmacia Stock",
         "width": 1280,
         "height": 820,
-        "minWidth": 1024,
-        "minHeight": 700,
+        "minWidth": 980,
+        "minHeight": 640,
         "resizable": true,
+        "maximized": true,
         "fullscreen": false,
         "center": true,
         "backgroundColor": "#e9f2ec"

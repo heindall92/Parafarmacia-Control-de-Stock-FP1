@@ -1,14 +1,15 @@
-import { Star, Users } from "lucide-react";
+import { MapPin, Star } from "lucide-react";
 import type { Producto } from "../lib/database";
+import { formatUbicacionCorta } from "../lib/ubicacion";
 import { CalendarWidget } from "./CalendarWidget";
 
 type WidgetPanelProps = {
-  alertas: Producto[];
+  destacados: Producto[];
   onSelectProduct: (p: Producto) => void;
   onGoToSearch?: () => void;
 };
 
-export function WidgetPanel({ alertas, onSelectProduct, onGoToSearch }: WidgetPanelProps) {
+export function WidgetPanel({ destacados, onSelectProduct, onGoToSearch }: WidgetPanelProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 lg:gap-4">
       <div className="widget-green morph-widget relative overflow-hidden rounded-[var(--radius-lg)] p-5">
@@ -32,24 +33,30 @@ export function WidgetPanel({ alertas, onSelectProduct, onGoToSearch }: WidgetPa
       </div>
 
       <div className="widget-blue morph-widget relative overflow-hidden rounded-[var(--radius-lg)] p-5">
-        <Users size={22} className="mb-3 text-[var(--widget-blue-icon)]" />
+        <MapPin size={22} className="mb-3 text-[var(--widget-blue-icon)]" />
         <h3 className="text-base font-bold text-[var(--widget-blue-title)]">
-          {alertas.length} productos con stock bajo
+          Ubicaciones de referencia
         </h3>
         <p className="mt-1 text-sm text-[var(--widget-blue-body)]">
-          Revisa los que necesitan reposición pronto.
+          Nombre del producto y dónde encontrarlo en la tienda.
         </p>
         <div className="mt-3 space-y-1.5">
-          {alertas.slice(0, 3).map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onSelectProduct(p)}
-              className="widget-chip flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium"
-            >
-              <span className="truncate">{p.nombre}</span>
-              <span className="text-danger ml-2 shrink-0">{p.stock} uds.</span>
-            </button>
-          ))}
+          {destacados.length === 0 ? (
+            <p className="text-xs text-[var(--widget-blue-body)]">No hay productos cargados.</p>
+          ) : (
+            destacados.slice(0, 3).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => onSelectProduct(p)}
+                className="widget-chip flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left text-xs font-medium"
+              >
+                <span className="truncate font-semibold">{p.nombre}</span>
+                <span className="truncate text-[var(--green-accent)] opacity-90">
+                  {formatUbicacionCorta(p)}
+                </span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 

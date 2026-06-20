@@ -4,8 +4,6 @@ import {
   getCategorias,
   getProductosCount,
   getProductosPaginated,
-  getProductosStockBajo,
-  getProductosStockBajoCount,
   getSeedStats,
   getSeedVersion,
   reimportarInventario,
@@ -14,24 +12,27 @@ import { Header } from "./components/Header";
 import { ProductFormModal } from "./components/ProductFormModal";
 import { CategoriasView } from "./components/CategoriasView";
 import { EstantesView } from "./components/EstantesView";
-import { ThemeToggle } from "./components/ThemeToggle";
+import { Vista3DView } from "./components/Vista3DView";
+import { ConfiguracionView } from "./components/ConfiguracionView";
 import { InventarioView } from "./components/InventarioView";
 import { SearchView } from "./components/SearchView";
-import { ProductList } from "./components/ProductList";
 import { Sidebar } from "./components/Sidebar";
 import { WidgetPanel } from "./components/WidgetPanel";
 import { AuroraBackground } from "./components/AuroraBackground";
+import { LoginScreen } from "./components/LoginScreen";
 import { SplashScreen } from "./components/SplashScreen";
 import { useAppBootstrap } from "./hooks/useAppBootstrap";
+import { useAuth } from "./hooks/useAuth";
 import { useMorphTransition, type AppView } from "./hooks/useMorphTransition";
+import type { Vista3DHighlight } from "./lib/estanteLayout";
 
 export default function App() {
   const { morphUpdate } = useMorphTransition();
   const { showSplash, exiting, step, progress, data, error, onSplashExitComplete } = useAppBootstrap();
+  const { isAuthenticated, signIn, signOut } = useAuth();
 
   const [activeView, setActiveView] = useState<AppView>("inventario");
-  const [alertas, setAlertas] = useState<Producto[]>([]);
-  const [alertCount, setAlertCount] = useState(0);
+  const [destacados, setDestacados] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(() => {
@@ -45,13 +46,13 @@ export default function App() {
   const [seedVersion, setSeedVersion] = useState<string | null>(null);
   const [reimporting, setReimporting] = useState(false);
   const [reimportMessage, setReimportMessage] = useState<string | null>(null);
+  const [mapHighlight, setMapHighlight] = useState<Vista3DHighlight | null>(null);
 
   const seedStats = getSeedStats();
 
   useEffect(() => {
     if (!data) return;
-    setAlertas(data.alertas);
-    setAlertCount(data.alertCount);
+    setDestacados(data.destacados);
     setCategorias(data.categorias);
     setSelectedProduct(data.selectedProduct);
     void getProductosCount().then(setProductCount);
@@ -101,18 +102,29 @@ export default function App() {
     morphUpdate(() => setSelectedProduct(p));
   };
 
+  const locateProductIn3D = (producto: Producto) => {
+    if (!producto.estante_id) return;
+    selectProduct(producto);
+    setMapHighlight({
+      estanteId: producto.estante_id,
+      categoriaId: producto.categoria_id,
+      productoId: producto.id,
+      productoNombre: producto.nombre,
+    });
+    navigate("vista-3d");
+  };
+
+  const clearMapHighlight = () => setMapHighlight(null);
+
   const refreshInventoryData = async () => {
-    const [count, cats, low, lowCount, prods] = await Promise.all([
+    const [count, cats, prods] = await Promise.all([
       getProductosCount(),
       getCategorias(),
-      getProductosStockBajo(),
-      getProductosStockBajoCount(),
       getProductosPaginated(50, 0),
     ]);
     setProductCount(count);
     setCategorias(cats);
-    setAlertas(low);
-    setAlertCount(lowCount);
+    setDestacados(prods.slice(0, 3));
     setSelectedProduct((current) => prods.find((item) => item.id === current?.id) ?? prods[0] ?? null);
     setInventoryRefreshKey((key) => key + 1);
   };
@@ -157,6 +169,10 @@ export default function App() {
     );
   }
 
+  if (!isAuthenticated) {
+    return <LoginScreen onSuccess={signIn} />;
+  }
+
   if (error) {
     return (
       <AuroraBackground>
@@ -180,12 +196,12 @@ export default function App() {
           <Sidebar
             activeView={activeView}
             onNavigate={navigate}
-            alertCount={alertCount}
             open={sidebarOpen}
             onClose={() => {
               setSidebarOpen(false);
               localStorage.setItem("farma-sidebar-open", "false");
             }}
+            onSignOut={signOut}
           />
 
           <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--bg-app)] p-4 sm:p-5 lg:p-6">
@@ -202,8 +218,13 @@ export default function App() {
                   <InventarioView
                     selectedProduct={selectedProduct}
                     onSelectProduct={selectProduct}
-                    onEditProduct={openEditProduct}
                     refreshKey={inventoryRefreshKey}
+                    onChanged={() => void refreshInventoryData()}
+                    onGoSearch={() => navigate("busqueda")}
+                    onGoShelves={() => navigate("estantes")}
+                    onGoCategories={() => navigate("categorias")}
+                    onGoSettings={() => navigate("configuracion")}
+        onGoVista3D={() => navigate("vista-3d")}
                   />
                 )}
 
@@ -211,7 +232,20 @@ export default function App() {
                   <SearchView
                     selectedProduct={selectedProduct}
                     onSelectProduct={selectProduct}
+                    onLocateInMap={locateProductIn3D}
                     onEditProduct={openEditProduct}
+                    onChanged={() => void refreshInventoryData()}
+                  />
+                )}
+
+                {activeView === "vista-3d" && (
+                  <Vista3DView
+                    selectedProduct={selectedProduct}
+                    onSelectProduct={selectProduct}
+                    refreshKey={inventoryRefreshKey}
+                    onChanged={() => void refreshInventoryData()}
+                    mapHighlight={mapHighlight}
+                    onClearMapHighlight={clearMapHighlight}
                   />
                 )}
 
@@ -219,7 +253,6 @@ export default function App() {
                   <EstantesView
                     selectedProduct={selectedProduct}
                     onSelectProduct={selectProduct}
-                    onEditProduct={openEditProduct}
                     refreshKey={inventoryRefreshKey}
                     onChanged={() => void refreshInventoryData()}
                   />
@@ -232,87 +265,25 @@ export default function App() {
                   />
                 )}
 
-                {activeView === "alertas" && (
-                  <div className="content-panel morph-content animate-fade-up flex flex-col overflow-hidden rounded-[var(--radius-xl)]">
-                    <div className="content-panel-header px-5 py-4">
-                      <h2 className="font-bold text-[var(--danger-text)]">Productos con stock bajo</h2>
-                      <p className="text-sm text-[var(--text-secondary)]">
-                        {alertCount} productos por debajo del mínimo
-                      </p>
-                    </div>
-                    <div className="flex-1 overflow-auto p-2">
-                      {alertas.length === 0 ? (
-                        <p className="p-4 text-sm text-[var(--text-secondary)]">
-                          No hay alertas de stock. Cuando registres stock mínimo en los productos, aparecerán aquí.
-                        </p>
-                      ) : (
-                        <ProductList
-                          productos={alertas}
-                          selectedId={selectedProduct?.id}
-                          onSelect={selectProduct}
-                          showLocation
-                        />
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {activeView === "configuracion" && (
-                  <div className="content-panel morph-content animate-fade-up rounded-[var(--radius-xl)] p-6">
-                    <h2 className="mb-2 text-lg font-bold text-[var(--text-primary)]">Configuración</h2>
-                    <p className="mb-6 text-sm text-[var(--text-secondary)]">
-                      Aplicación 100% offline. Los datos se guardan en SQLite en tu equipo.
-                    </p>
-                    <div className="space-y-3 text-sm text-[var(--text-primary)]">
-                      <div className="rounded-xl bg-[var(--green-soft)] px-4 py-3">
-                        <strong>Base de datos:</strong> farmacia.db (local)
-                      </div>
-                      <div className="surface-muted rounded-xl px-4 py-3">
-                        <strong>Productos en base de datos:</strong>{" "}
-                        {productCount !== null
-                          ? productCount.toLocaleString("es-ES")
-                          : "…"}{" "}
-                        / {seedStats.productos.toLocaleString("es-ES")} del Excel
-                      </div>
-                      <div className="surface-muted rounded-xl px-4 py-3">
-                        <strong>Versión del inventario:</strong> {seedVersion ?? "Sin importar"}
-                      </div>
-                      <div className="surface-muted rounded-xl px-4 py-3">
-                        <strong>Estantes configurados:</strong> {seedStats.estantes}
-                      </div>
-                      <div className="surface-muted rounded-xl px-4 py-3">
-                        <strong>Bloques / categorías:</strong> {categorias.length}
-                      </div>
-                      <div className="surface-card flex items-center justify-between rounded-xl px-4 py-3">
-                        <span><strong>Apariencia</strong></span>
-                        <ThemeToggle compact />
-                      </div>
-                      <button
-                        type="button"
-                        disabled={reimporting}
-                        onClick={() => void handleReimport()}
-                        className="w-full rounded-xl bg-[var(--green-accent)] px-4 py-3 font-semibold text-[var(--text-on-green)] disabled:opacity-60"
-                      >
-                        {reimporting ? "Reimportando inventario..." : "Reimportar inventario desde Excel"}
-                      </button>
-                      {reimportMessage && (
-                        <p className="rounded-xl bg-[var(--green-soft)] px-4 py-3 text-sm">{reimportMessage}</p>
-                      )}
-                      {productCount !== null && productCount < seedStats.productos * 0.9 && (
-                        <p className="rounded-xl bg-[var(--danger-bg)] px-4 py-3 text-sm text-[var(--danger-text)]">
-                          El inventario parece incompleto. Pulsa reimportar para cargar los{" "}
-                          {seedStats.productos.toLocaleString("es-ES")} productos del Excel.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <ConfiguracionView
+                    productCount={productCount}
+                    totalEsperado={seedStats.productos}
+                    seedVersion={seedVersion}
+                    estantesCount={seedStats.estantes}
+                    categoriasCount={categorias.length}
+                    reimporting={reimporting}
+                    reimportMessage={reimportMessage}
+                    onReimport={() => void handleReimport()}
+                    onDataChanged={() => void refreshInventoryData()}
+                  />
                 )}
               </div>
 
               {(activeView === "inventario" || activeView === "busqueda") && (
-                <div className="widget-rail hidden min-h-0 shrink-0 lg:flex lg:flex-col">
+                <div className="widget-rail hidden min-h-0 shrink-0 overflow-y-auto lg:flex lg:flex-col">
                   <WidgetPanel
-                    alertas={alertas}
+                    destacados={destacados}
                     onSelectProduct={selectProduct}
                     onGoToSearch={() => navigate("busqueda")}
                   />

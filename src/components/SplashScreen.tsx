@@ -1,6 +1,6 @@
 import { LayoutGrid, ShieldCheck, WifiOff } from "lucide-react";
 import { BOOTSTRAP_STEPS } from "../hooks/useAppBootstrap";
-import { AuroraBackground } from "./AuroraBackground";
+import { SplashGeometricBackground } from "./SplashGeometricBackground";
 
 type SplashScreenProps = {
   step: number;
@@ -11,7 +11,7 @@ type SplashScreenProps = {
 
 export function SplashScreen({ step, progress, exiting, onExitComplete }: SplashScreenProps) {
   return (
-    <AuroraBackground>
+    <SplashGeometricBackground>
       <div
         className={`splash-screen ${exiting ? "splash-screen--exit" : ""}`}
         onAnimationEnd={(event) => {
@@ -20,11 +20,6 @@ export function SplashScreen({ step, progress, exiting, onExitComplete }: Splash
           }
         }}
       >
-        <div className="splash-grid" aria-hidden="true" />
-
-        <div className="splash-orbit splash-orbit--a" aria-hidden="true" />
-        <div className="splash-orbit splash-orbit--b" aria-hidden="true" />
-
         <div className="hyper-frame">
           <span className="hyper-frame-corner hyper-frame-corner--tl" aria-hidden="true" />
           <span className="hyper-frame-corner hyper-frame-corner--tr" aria-hidden="true" />
@@ -101,6 +96,6 @@ export function SplashScreen({ step, progress, exiting, onExitComplete }: Splash
 
         <p className="splash-footer">Preparando tu panel de trabajo…</p>
       </div>
-    </AuroraBackground>
+    </SplashGeometricBackground>
   );
 }

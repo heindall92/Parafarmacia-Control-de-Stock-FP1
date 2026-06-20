@@ -5,29 +5,42 @@ import {
   getProductosPaginated,
   type Producto,
 } from "../lib/database";
-import { ProductDetailCard } from "./ProductDetailCard";
 import { ProductList } from "./ProductList";
+import { ProductImageModal } from "./ProductImageModal";
+import { QuickActionCards } from "./QuickActionCards";
 
 const PAGE_SIZE = 50;
 
 type InventarioViewProps = {
   selectedProduct: Producto | null;
   onSelectProduct: (producto: Producto) => void;
-  onEditProduct?: (producto: Producto) => void;
   refreshKey?: number;
+  onChanged?: () => void;
+  onGoSearch?: () => void;
+  onGoShelves?: () => void;
+  onGoCategories?: () => void;
+  onGoSettings?: () => void;
+  onGoVista3D?: () => void;
 };
 
 export function InventarioView({
   selectedProduct,
   onSelectProduct,
-  onEditProduct,
   refreshKey = 0,
+  onChanged,
+  onGoSearch,
+  onGoShelves,
+  onGoCategories,
+  onGoSettings,
+  onGoVista3D,
 }: InventarioViewProps) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [popupProduct, setPopupProduct] = useState<Producto | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -49,9 +62,35 @@ export function InventarioView({
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const handleSelect = (producto: Producto) => {
+    onSelectProduct(producto);
+    setPopupProduct(producto);
+    setPopupOpen(true);
+  };
+
+  const handleSaved = (saved: Producto) => {
+    setProductos((prev) => prev.map((item) => (item.id === saved.id ? saved : item)));
+    setPopupProduct(saved);
+    onSelectProduct(saved);
+    onChanged?.();
+  };
+
+  const handleDeleted = (id: number) => {
+    setProductos((prev) => prev.filter((item) => item.id !== id));
+    setPopupOpen(false);
+    onChanged?.();
+  };
+
   return (
-    <div className="animate-fade-up flex h-full flex-col gap-5">
-      <ProductDetailCard producto={selectedProduct} onEdit={onEditProduct} />
+    <div className="animate-fade-up flex h-full flex-col gap-4 lg:gap-5">
+      <QuickActionCards
+        totalProductos={total}
+        onSearch={() => onGoSearch?.()}
+        onShelves={() => onGoShelves?.()}
+        onCategories={() => onGoCategories?.()}
+        onSettings={() => onGoSettings?.()}
+        onVista3D={() => onGoVista3D?.()}
+      />
 
       <div className="content-panel morph-content flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-xl)]">
         <div className="content-panel-header px-5 py-4">
@@ -96,7 +135,7 @@ export function InventarioView({
                 setQuery(event.target.value);
                 setPage(0);
               }}
-              placeholder="Filtrar inventario por nombre, código o ubicación..."
+              placeholder="Filtrar por nombre (tolera errores al escribir)..."
               className="input-field w-full rounded-xl py-3 pl-11 pr-4 text-sm"
             />
           </div>
@@ -113,12 +152,20 @@ export function InventarioView({
             <ProductList
               productos={productos}
               selectedId={selectedProduct?.id}
-              onSelect={onSelectProduct}
+              onSelect={handleSelect}
               showLocation
             />
           )}
         </div>
       </div>
+
+      <ProductImageModal
+        open={popupOpen}
+        producto={popupProduct}
+        onClose={() => setPopupOpen(false)}
+        onSaved={handleSaved}
+        onDeleted={handleDeleted}
+      />
     </div>
   );
 }

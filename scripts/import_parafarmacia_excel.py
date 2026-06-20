@@ -1,12 +1,22 @@
-"""Importa parafarmacia v1.xlsx y genera seedData.json para la app."""
+"""Importa parafarmacia v1.xlsx y genera seedData.json + fotos por estante.
+
+Además del catálogo (productos, estantes, bloques), extrae las fotos que el
+Excel tiene ancladas a filas de cada hoja y asocia a cada medicamento la foto
+del bloque donde aparece. Las imágenes se redimensionan y se guardan en
+`public/estantes/` para servirlas desde la app (offline).
+"""
 
 from __future__ import annotations
 
+import io
 import json
 import re
+import zipfile
 from pathlib import Path
+from xml.etree import ElementTree as ET
 
 import pandas as pd
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 EXCEL_CANDIDATES = [
@@ -14,6 +24,18 @@ EXCEL_CANDIDATES = [
     Path(r"g:\parafarmacia v1.xlsx"),
 ]
 OUTPUT = ROOT / "src" / "lib" / "seedData.json"
+IMG_DIR = ROOT / "public" / "estantes"
+IMG_PUBLIC_PREFIX = "estantes"
+MAX_IMG_SIZE = 1100  # px (lado mayor)
+JPEG_QUALITY = 80
+
+NS = {
+    "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    "pkgr": "http://schemas.openxmlformats.org/package/2006/relationships",
+    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    "xdr": "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+}
 
 HEADER_NAMES = {
     "medicamento / producto",
@@ -60,12 +82,139 @@ def is_header(name: str | None) -> bool:
     return name.lower() in HEADER_NAMES
 
 
+# --------------------------------------------------------------------------
+# Relaciones del paquete xlsx: hoja -> drawing -> imágenes ancladas a filas
+# --------------------------------------------------------------------------
+
+def _read_rels(zf: zipfile.ZipFile, rels_path: str) -> dict[str, str]:
+    if rels_path not in zf.namelist():
+        return {}
+    root = ET.fromstring(zf.read(rels_path))
+    out: dict[str, str] = {}
+    for rel in root.findall("pkgr:Relationship", NS):
+        out[rel.attrib["Id"]] = rel.attrib["Target"]
+    return out
+
+
+def _resolve(base_dir: str, target: str) -> str:
+    parts = (base_dir + "/" + target).split("/")
+    stack: list[str] = []
+    for part in parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if stack:
+                stack.pop()
+        else:
+            stack.append(part)
+    return "/".join(stack)
+
+
+def build_sheet_image_map(zf: zipfile.ZipFile) -> dict[str, list[dict]]:
+    """Devuelve {nombre_hoja: [{from_row, to_row, media}]}"""
+    workbook = ET.fromstring(zf.read("xl/workbook.xml"))
+    wb_rels = _read_rels(zf, "xl/_rels/workbook.xml.rels")
+
+    sheet_to_target: dict[str, str] = {}
+    for sheet in workbook.find("main:sheets", NS).findall("main:sheet", NS):
+        name = sheet.attrib["name"]
+        rid = sheet.attrib[f"{{{NS['r']}}}id"]
+        target = wb_rels.get(rid)
+        if target:
+            sheet_to_target[name] = _resolve("xl", target)
+
+    result: dict[str, list[dict]] = {}
+    for name, sheet_path in sheet_to_target.items():
+        sheet_dir = sheet_path.rsplit("/", 1)[0]
+        sheet_file = sheet_path.rsplit("/", 1)[1]
+        sheet_rels = _read_rels(zf, f"{sheet_dir}/_rels/{sheet_file}.rels")
+
+        drawing_target = next(
+            (t for t in sheet_rels.values() if "drawings/drawing" in t), None
+        )
+        if not drawing_target:
+            result[name] = []
+            continue
+
+        drawing_path = _resolve(sheet_dir, drawing_target)
+        drawing_dir = drawing_path.rsplit("/", 1)[0]
+        drawing_file = drawing_path.rsplit("/", 1)[1]
+        drawing_rels = _read_rels(zf, f"{drawing_dir}/_rels/{drawing_file}.rels")
+
+        drawing = ET.fromstring(zf.read(drawing_path))
+        anchors: list[dict] = []
+
+        for anchor in list(drawing):
+            tag = anchor.tag.split("}")[-1]
+            frm = anchor.find("xdr:from", NS)
+            if frm is None:
+                continue
+            from_row = int(frm.find("xdr:row", NS).text)
+
+            to_node = anchor.find("xdr:to", NS)
+            to_row = (
+                int(to_node.find("xdr:row", NS).text)
+                if to_node is not None
+                else from_row
+            )
+
+            blip = anchor.find(".//a:blip", NS)
+            if blip is None:
+                continue
+            embed = blip.attrib.get(f"{{{NS['r']}}}embed")
+            target = drawing_rels.get(embed)
+            if not target:
+                continue
+            media = _resolve(drawing_dir, target)
+            anchors.append({"from_row": from_row, "to_row": to_row, "media": media})
+
+        anchors.sort(key=lambda a: a["from_row"])
+        result[name] = anchors
+
+    return result
+
+
+def pick_image(anchors: list[dict], row: int) -> str | None:
+    if not anchors:
+        return None
+
+    def distance(anchor: dict) -> int:
+        if anchor["from_row"] <= row <= anchor["to_row"]:
+            return 0
+        return min(abs(anchor["from_row"] - row), abs(anchor["to_row"] - row))
+
+    best = min(anchors, key=distance)
+    return best["media"]
+
+
+def export_image(zf: zipfile.ZipFile, media: str, stem: str) -> str:
+    """Redimensiona y guarda la imagen; devuelve la ruta pública relativa."""
+    out_name = f"{stem}.jpg"
+    out_path = IMG_DIR / out_name
+    public_ref = f"{IMG_PUBLIC_PREFIX}/{out_name}"
+    if out_path.exists():
+        return public_ref
+
+    data = zf.read(media)
+    img = Image.open(io.BytesIO(data))
+    if img.mode not in ("RGB", "L"):
+        img = img.convert("RGB")
+    img.thumbnail((MAX_IMG_SIZE, MAX_IMG_SIZE), Image.LANCZOS)
+    IMG_DIR.mkdir(parents=True, exist_ok=True)
+    img.save(out_path, "JPEG", quality=JPEG_QUALITY, optimize=True)
+    return public_ref
+
+
+# --------------------------------------------------------------------------
+# Parseo de hojas
+# --------------------------------------------------------------------------
+
 def parse_sheet(sheet_name: str, df: pd.DataFrame) -> tuple[list[dict], set[str]]:
     products: list[dict] = []
     blocks: set[str] = set()
     current_block: str | None = None
 
-    for _, row in df.iterrows():
+    for excel_row, row in df.iterrows():
         vals = [normalize(v) for v in row.tolist()]
 
         for value in vals:
@@ -86,6 +235,7 @@ def parse_sheet(sheet_name: str, df: pd.DataFrame) -> tuple[list[dict], set[str]
             {
                 "estante": sheet_name,
                 "bloque": current_block,
+                "fila": int(excel_row),
                 "nombre": name,
                 "ubicacion": ubicacion,
                 "indicacion": indicacion,
@@ -124,8 +274,6 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
         seen_codes.add(code)
 
         notas_parts = []
-        if row.get("ubicacion"):
-            notas_parts.append(f"Ubicación: {row['ubicacion']}")
         if row.get("indicacion"):
             notas_parts.append(f"Indicación: {row['indicacion']}")
         if row.get("advertencia"):
@@ -140,6 +288,9 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
                 "categoria": bloque or "General",
                 "categoria_id": categoria_index.get(bloque or "", None),
                 "ubicacion": row.get("ubicacion"),
+                "indicacion": row.get("indicacion"),
+                "advertencia": row.get("advertencia"),
+                "imagen": row.get("imagen"),
                 "stock": 0,
                 "stock_minimo": 3,
                 "precio": None,
@@ -148,13 +299,7 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
             }
         )
 
-    # Asegurar categoría General si hay productos sin bloque
     if any(p["categoria"] == "General" for p in productos) and "General" not in categoria_index:
-        categorias.insert(0, {"nombre": "General", "color": "#2D6A4F"})
-        categoria_index["General"] = 1
-        for cat in categorias[1:]:
-            pass
-        # Reindex categorias cleanly
         categorias = [{"nombre": "General", "color": "#2D6A4F"}] + [
             c for c in categorias if c["nombre"] != "General"
         ]
@@ -162,6 +307,7 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
         for producto in productos:
             producto["categoria_id"] = categoria_index.get(producto["categoria"], 1)
 
+    con_imagen = sum(1 for p in productos if p.get("imagen"))
     return {
         "source": "parafarmacia v1.xlsx",
         "estantes": estantes,
@@ -171,6 +317,7 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
             "estantes": len(estantes),
             "categorias": len(categorias),
             "productos": len(productos),
+            "con_imagen": con_imagen,
         },
     }
 
@@ -178,16 +325,30 @@ def build_seed(product_rows: list[dict], estante_names: list[str], blocks: set[s
 def main() -> None:
     excel_path = find_excel()
     xl = pd.ExcelFile(excel_path)
-
-    all_products: list[dict] = []
-    all_blocks: set[str] = set()
     estante_names = xl.sheet_names
 
-    for sheet in estante_names:
-        df = pd.read_excel(excel_path, sheet_name=sheet, header=None)
-        products, blocks = parse_sheet(sheet, df)
-        all_products.extend(products)
-        all_blocks.update(blocks)
+    with zipfile.ZipFile(excel_path) as zf:
+        sheet_images = build_sheet_image_map(zf)
+
+        all_products: list[dict] = []
+        all_blocks: set[str] = set()
+        media_cache: dict[str, str] = {}
+
+        for sheet in estante_names:
+            df = pd.read_excel(excel_path, sheet_name=sheet, header=None)
+            products, blocks = parse_sheet(sheet, df)
+            anchors = sheet_images.get(sheet, [])
+
+            for product in products:
+                media = pick_image(anchors, product["fila"])
+                if media:
+                    if media not in media_cache:
+                        stem = Path(media).stem
+                        media_cache[media] = export_image(zf, media, stem)
+                    product["imagen"] = media_cache[media]
+
+            all_products.extend(products)
+            all_blocks.update(blocks)
 
     seed = build_seed(all_products, estante_names, all_blocks)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -195,7 +356,9 @@ def main() -> None:
 
     print(f"Excel: {excel_path}")
     print(f"Generado: {OUTPUT}")
+    print(f"Imágenes en: {IMG_DIR} ({len(media_cache)} fotos únicas)")
     print(f"Productos: {seed['stats']['productos']}")
+    print(f"Con imagen: {seed['stats']['con_imagen']}")
     print(f"Categorías: {seed['stats']['categorias']}")
     print(f"Estantes: {seed['stats']['estantes']}")
 

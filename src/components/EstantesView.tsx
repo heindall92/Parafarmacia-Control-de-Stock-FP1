@@ -9,13 +9,12 @@ import {
   type Estante,
   type Producto,
 } from "../lib/database";
-import { ProductDetailCard } from "./ProductDetailCard";
 import { ShelfMap } from "./ShelfMap";
+import { ProductImageModal } from "./ProductImageModal";
 
 type EstantesViewProps = {
   selectedProduct: Producto | null;
   onSelectProduct: (producto: Producto) => void;
-  onEditProduct?: (producto: Producto) => void;
   refreshKey?: number;
   onChanged?: () => void;
 };
@@ -23,7 +22,6 @@ type EstantesViewProps = {
 export function EstantesView({
   selectedProduct,
   onSelectProduct,
-  onEditProduct,
   refreshKey = 0,
   onChanged,
 }: EstantesViewProps) {
@@ -35,6 +33,27 @@ export function EstantesView({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mapKey, setMapKey] = useState(0);
+  const [popupProduct, setPopupProduct] = useState<Producto | null>(null);
+  const [popupOpen, setPopupOpen] = useState(false);
+
+  const handleSelect = (producto: Producto) => {
+    onSelectProduct(producto);
+    setPopupProduct(producto);
+    setPopupOpen(true);
+  };
+
+  const handleSaved = (saved: Producto) => {
+    setPopupProduct(saved);
+    onSelectProduct(saved);
+    setMapKey((key) => key + 1);
+    onChanged?.();
+  };
+
+  const handleDeleted = () => {
+    setPopupOpen(false);
+    setMapKey((key) => key + 1);
+    onChanged?.();
+  };
 
   const load = async () => {
     const [ests, estCounts] = await Promise.all([getEstantes(), getEstanteCounts()]);
@@ -116,8 +135,6 @@ export function EstantesView({
 
   return (
     <div className="animate-fade-up flex h-full flex-col gap-5">
-      <ProductDetailCard producto={selectedProduct} onEdit={onEditProduct} />
-
       <div className="content-panel morph-content rounded-[var(--radius-xl)] p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -206,10 +223,18 @@ export function EstantesView({
         <ShelfMap
           key={mapKey}
           refreshKey={refreshKey + mapKey}
-          onSelectProduct={onSelectProduct}
+          onSelectProduct={handleSelect}
           highlightProductId={selectedProduct?.id}
         />
       </div>
+
+      <ProductImageModal
+        open={popupOpen}
+        producto={popupProduct}
+        onClose={() => setPopupOpen(false)}
+        onSaved={handleSaved}
+        onDeleted={handleDeleted}
+      />
     </div>
   );
 }

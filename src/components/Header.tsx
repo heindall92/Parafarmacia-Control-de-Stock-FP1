@@ -1,7 +1,6 @@
-import { Mail, Menu, Plus } from "lucide-react";
+import { Menu, Plus } from "lucide-react";
 import type { AppView } from "../hooks/useMorphTransition";
 import { VIEW_LABELS } from "../hooks/useMorphTransition";
-import { ThemeToggle } from "./ThemeToggle";
 
 type HeaderProps = {
   activeView: AppView;
@@ -27,7 +26,6 @@ export function Header({ activeView, onNewProduct, sidebarOpen, onToggleSidebar 
         </h1>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <ThemeToggle compact />
         {(activeView === "inventario" || activeView === "busqueda") && (
           <button
             type="button"
@@ -38,9 +36,6 @@ export function Header({ activeView, onNewProduct, sidebarOpen, onToggleSidebar 
             <span className="hidden sm:inline">Nuevo producto</span>
           </button>
         )}
-        <button className="btn-icon morph-action-btn hidden h-12 w-12 rounded-xl shadow-[var(--shadow-card)] sm:flex">
-          <Mail size={18} />
-        </button>
       </div>
     </header>
   );

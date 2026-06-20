@@ -1,14 +1,4 @@
-import {
-  AlertTriangle,
-  Grid3X3,
-  HelpCircle,
-  LayoutGrid,
-  Package,
-  Search,
-  Settings,
-  Tags,
-  X,
-} from "lucide-react";
+import { Box, Grid3X3, HelpCircle, LayoutGrid, LogOut, Package, Search, Settings, Tags } from "lucide-react";
 import type { AppView } from "../hooks/useMorphTransition";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -22,9 +12,9 @@ type NavItem = {
 const mainNav: NavItem[] = [
   { id: "inventario", label: "Inventario", icon: <Package size={18} strokeWidth={1.75} /> },
   { id: "busqueda", label: "Búsqueda", icon: <Search size={18} strokeWidth={1.75} /> },
+  { id: "vista-3d", label: "Vista 3D", icon: <Box size={18} strokeWidth={1.75} /> },
   { id: "estantes", label: "Estantes", icon: <Grid3X3 size={18} strokeWidth={1.75} /> },
   { id: "categorias", label: "Categorías", icon: <Tags size={18} strokeWidth={1.75} /> },
-  { id: "alertas", label: "Stock bajo", icon: <AlertTriangle size={18} strokeWidth={1.75} /> },
 ];
 
 const settingsNav: NavItem[] = [
@@ -34,17 +24,15 @@ const settingsNav: NavItem[] = [
 type SidebarProps = {
   activeView: AppView;
   onNavigate: (view: AppView) => void;
-  alertCount: number;
   open: boolean;
   onClose: () => void;
+  onSignOut: () => void;
 };
 
-export function Sidebar({ activeView, onNavigate, alertCount, open, onClose }: SidebarProps) {
-
+export function Sidebar({ activeView, onNavigate, open, onClose, onSignOut }: SidebarProps) {
   const renderItem = (item: NavItem) => {
     const isActive = activeView === item.id;
-    const badge =
-      item.id === "alertas" && alertCount > 0 ? String(alertCount) : item.badge;
+    const badge = item.badge;
 
     return (
       <button
@@ -86,18 +74,13 @@ export function Sidebar({ activeView, onNavigate, alertCount, open, onClose }: S
         onClick={onClose}
       />
       <aside className="fixed inset-y-0 left-0 z-50 flex h-full w-[min(280px,85vw)] shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-sidebar)]/95 px-4 py-5 backdrop-blur-md lg:static lg:z-auto lg:w-[clamp(220px,18vw,260px)] lg:bg-[var(--bg-sidebar)]/80 lg:px-5 lg:py-6">
-      <div className="mb-10 flex items-center justify-between gap-2 px-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--green-accent)] text-white">
-            <LayoutGrid size={18} />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
-            farma<span className="text-[var(--green-accent)]">.</span>
-          </span>
+      <div className="mb-10 flex items-center gap-2 px-2">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--green-accent)] text-white">
+          <LayoutGrid size={18} />
         </div>
-        <button type="button" onClick={onClose} className="btn-icon h-9 w-9 rounded-lg lg:hidden">
-          <X size={18} />
-        </button>
+        <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
+          farma<span className="text-[var(--green-accent)]">.</span>
+        </span>
       </div>
 
       <div className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -127,6 +110,14 @@ export function Sidebar({ activeView, onNavigate, alertCount, open, onClose }: S
             <div className="text-xs text-[var(--text-secondary)]">Modo offline · Local</div>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border-medium)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:border-[var(--danger-text)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger-text)]"
+        >
+          <LogOut size={16} strokeWidth={1.75} />
+          Cerrar sesión
+        </button>
       </div>
     </aside>
     </>

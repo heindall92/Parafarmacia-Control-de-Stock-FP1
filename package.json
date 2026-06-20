@@ -13,20 +13,28 @@
     "native:run": "tauri run --release",
     "native:build": "tauri build",
     "native:install": "tauri build",
+    "portable:desktop": "powershell -ExecutionPolicy Bypass -File scripts/crear-portable-escritorio.ps1",
+    "portable:desktop:copy": "powershell -ExecutionPolicy Bypass -File scripts/crear-portable-escritorio.ps1 -SkipBuild",
     "import:excel": "python scripts/import_parafarmacia_excel.py"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-sql": "^2.2.0",
+    "framer-motion": "^12.40.0",
     "lucide-react": "^0.511.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.8",
     "@tauri-apps/cli": "^2.5.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/three": "^0.184.1",
     "@vitejs/plugin-react": "^4.4.1",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.8.3",

@@ -228,31 +228,7 @@ export function ProductFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Cantidad en stock *
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={stock}
-                onChange={(event) => setStock(event.target.value)}
-                className="input-field w-full rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
-                Stock mínimo
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={stockMinimo}
-                onChange={(event) => setStockMinimo(event.target.value)}
-                className="input-field w-full rounded-xl px-4 py-3 text-sm"
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
                 Precio (€)
@@ -263,6 +239,16 @@ export function ProductFormModal({
                 step="0.01"
                 value={precio}
                 onChange={(event) => setPrecio(event.target.value)}
+                className="input-field w-full rounded-xl px-4 py-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">
+                Código interno
+              </label>
+              <input
+                value={codigo}
+                onChange={(event) => setCodigo(event.target.value)}
                 className="input-field w-full rounded-xl px-4 py-3 text-sm"
               />
             </div>
